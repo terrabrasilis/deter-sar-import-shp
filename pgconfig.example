@@ -1,0 +1,5 @@
+user="<user_name>"
+host="<host_name_or_ip>"
+port="<the_port_where_service_is_listen>"
+database="<database_name>"
+password="<the_password>"

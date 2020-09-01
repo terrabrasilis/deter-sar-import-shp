@@ -1,0 +1,10 @@
+version: '2'
+
+services:
+  import-shp:
+    image: terrabrasilis/deter-sar-import-shp:v1.0.0
+    volumes:
+      - /data/import-shp-script:/data/files
+      - /data/import-shp-script/logs:/logs
+      - /data/deter-sar/DETERSAR/output:/input/files:ro
+    restart: always

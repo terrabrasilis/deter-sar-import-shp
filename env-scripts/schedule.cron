@@ -1,0 +1,3 @@
+# m h  dom mon dow   command
+# used to generate Shapefiles every days
+*/20 * * * * /bin/bash /usr/local/exec_cron.sh >> /logs/exec_cron_deter_sar.log 2>&1
