@@ -7,6 +7,9 @@ pass=$(cat $SHARED_DIR/pgconfig | grep -oP '(?<=password=[^*])[^"]*')
 OUTPUT_TABLE="deter_sar_1ha"
 DATE_LOG=$(date +"%Y-%m-%d_%H:%M:%S")
 
+echo
+echo "=========================== $DATE_LOG ==========================="
+
 # define shapefile name
 YESTERDAY=$(date -d '1 day ago' '+%Y-%m-%d')
 # try read start and end date from file
@@ -42,21 +45,29 @@ SHP2PGSQL_OPTIONS="-a -s 4326:4326 -W 'LATIN1' -g geometries"
 # find the shapename into log table
 SHP_MATCHED=($($PG_BIN/psql $PG_CON -t -c "$SQL_CHECK_FILE"))
 
-if [[ ! "YES" = "$SHP_MATCHED" ]];
+if [[ "0" = "$?" ]];
 then
-  # copy deter-sar file to keep as backup
-  cp -a $INPUT_DIR"/"$SHP_NAME".zip" "$SHARED_DIR/"
-  unzip -j $SHARED_DIR"/"$SHP_NAME".zip" "$SHARED_DIR/"
-  # import shapefiles
-  if $PG_BIN/shp2pgsql $SHP2PGSQL_OPTIONS $SHARED_DIR"/"$SHP_NAME $OUTPUT_TABLE | $PG_BIN/psql $PG_CON
+  echo "Conection ok..."
+
+  if [[ ! "YES" = "$SHP_MATCHED" ]];
   then
-      echo "$DATE_LOG - Import ($SHP_NAME) ... OK" >> "/logs/import-shapefile.log"
-      $PG_BIN/psql $PG_CON -t -c "$SQL_LOG_IMPORT"
-      # remove uncompressed shp files
-      rm -rf $SHARED_DIR"/"$SHP_NAME".{shx,prj,shp,dbf}"
+    # copy deter-sar file to keep as backup
+    cp -a $INPUT_DIR"/"$SHP_NAME".zip" "$SHARED_DIR/"
+    unzip -j $SHARED_DIR"/"$SHP_NAME".zip" -d "$SHARED_DIR/"
+    # import shapefiles
+    if $PG_BIN/shp2pgsql $SHP2PGSQL_OPTIONS $SHARED_DIR"/"$SHP_NAME $OUTPUT_TABLE | $PG_BIN/psql $PG_CON
+    then
+        echo "$DATE_LOG - Import ($SHP_NAME) ... OK" >> "/logs/import-shapefile.log"
+        $PG_BIN/psql $PG_CON -t -c "$SQL_LOG_IMPORT"
+        # remove uncompressed shp files
+        rm -rf $SHARED_DIR"/"$SHP_NAME".{shx,prj,shp,dbf,cpg,fix}"
+    else
+        echo "$DATE_LOG - Import ($SHP_NAME) ... FAIL" >>"/logs/import-shapefile.log"
+    fi
   else
-      echo "$DATE_LOG - Import ($SHP_NAME) ... FAIL" >>"/logs/import-shapefile.log"
+    echo "$DATE_LOG - The SHP($SHP_NAME) has been imported before." >> "/logs/import-shapefile.log"
   fi
+
 else
-  echo "$DATE_LOG - The SHP($SHP_NAME) has been imported before." >> "/logs/import-shapefile.log"
+  echo "Conection failure..."
 fi
