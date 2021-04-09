@@ -1,10 +1,11 @@
 version: '2'
 
 services:
-  import-shp:
-    image: terrabrasilis/deter-sar-import-shp:v1.0.0
+  import-amz-shp:
+    image: terrabrasilis/deter-sar-import-shp:v1.2.0
+    container_name: import-amz-shp
     volumes:
-      - /data/import-shp-script:/data/files
-      - /data/import-shp-script/logs:/logs
-      - /data/deter-sar/DETERSAR/output:/input/files:ro
+      - /data/import-amz-shp-script:/data/files
+      - /data/import-amz-shp-script/logs:/logs
+      - /data/deteramz-sar/DETER_R_AMZ/output:/input/files
     restart: always

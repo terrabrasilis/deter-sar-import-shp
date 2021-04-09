@@ -13,16 +13,13 @@ fi
 
 VERSION=$(cat PROJECT_VERSION | grep -oP '(?<="version": ")[^"]*')
 
-echo "Do you want to build image of terrabrasilis/deter-sar-import-shp? Type yes to confirm or anything else." ; read BUILD_IMG1
-if [[ "$BUILD_IMG1" = "yes" ]]; then
-    echo 
-    echo "/######################################################################/"
-    echo " Build new image terrabrasilis/deter-sar-import-shp:v$VERSION "
-    echo "/######################################################################/"
-    echo
+echo 
+echo "/######################################################################/"
+echo " Build new image terrabrasilis/deter-sar-import-shp:v$VERSION "
+echo "/######################################################################/"
+echo
 
-    docker build $NO_CACHE -t "terrabrasilis/deter-sar-import-shp:v$VERSION" --build-arg VERSION="v$VERSION" -f env-scripts/Dockerfile .
-fi
+docker build $NO_CACHE -t "terrabrasilis/deter-sar-import-shp:v$VERSION" --build-arg VERSION="v$VERSION" -f env-scripts/Dockerfile .
 
 # send to dockerhub
 echo 
@@ -31,7 +28,5 @@ if [[ ! "$SEND_TO_HUB" = "yes" ]]; then
     echo "Ok, not send the images."
 else
     echo "Nice, sending the image!"
-    if [[ "$BUILD_IMG1" = "yes" ]]; then
-        docker push "terrabrasilis/deter-sar-import-shp:v$VERSION"
-    fi
+    docker push "terrabrasilis/deter-sar-import-shp:v$VERSION"
 fi
