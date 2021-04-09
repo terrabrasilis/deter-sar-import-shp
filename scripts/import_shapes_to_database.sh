@@ -4,6 +4,7 @@ port=$(cat $SHARED_DIR/pgconfig | grep -oP '(?<=port=[^*])[^"]*')
 database=$(cat $SHARED_DIR/pgconfig | grep -oP '(?<=database=[^*])[^"]*')
 user=$(cat $SHARED_DIR/pgconfig | grep -oP '(?<=user=[^*])[^"]*')
 pass=$(cat $SHARED_DIR/pgconfig | grep -oP '(?<=password=[^*])[^"]*')
+SCHEMA="deter_sar"
 OUTPUT_SOURCE_TABLE="deter_sar_from_source"
 DATE_LOG=$(date +"%Y-%m-%d_%H:%M:%S")
 
@@ -16,29 +17,25 @@ PG_CON="-d $database -p $port -h $host"
 echo
 echo "=========================== $DATE_LOG ==========================="
 
-# define shapefile name
-YESTERDAY=$(date -d '1 day ago' '+%Y-%m-%d')
-# try read start and end date from file
-if [[ -f "$INPUT_DIR/overwrite_period" ]];
+# try read shapefile name from trigger file
+if [[ -f "$INPUT_DIR/trigger.txt" ]];
 then
-  START_DATE=$(cat $INPUT_DIR/overwrite_period | grep -oP '(?<=start_date=[^*])[^"]*')
-  END_DATE=$(cat $INPUT_DIR/overwrite_period | grep -oP '(?<=end_date=[^*])[^"]*')
-  mv "$INPUT_DIR/overwrite_period" "$INPUT_DIR/overwrite_period.done"
+  # get shapefile name
+  SHP_NAME=$(cat $INPUT_DIR/trigger.txt)
 else
-  START_DATE=$YESTERDAY
-  END_DATE=$YESTERDAY
+  # hasn't a trigger file, aborting
+  exit
 fi
 
-SHP_NAME="DETERSAR_CR2_$START_DATE"_"$END_DATE"
-if [[ ! -f $INPUT_DIR"/"$SHP_NAME".zip" ]]; then
+if [[ ! -f $INPUT_DIR"/"$SHP_NAME ]]; then
   echo "$DATE_LOG - Cannot find SHP($SHP_NAME), aborting..."
   exit
 fi
 
 # Define SQL to log the success operation. Tips to select datetime as a string (to_char(timezone('America/Sao_Paulo',imported_at),'YYYY-MM-DD HH24:MI:SS'))
-SQL_LOG_IMPORT="INSERT INTO public.deter_sar_import_log(imported_at, filename) VALUES (timezone('America/Sao_Paulo',now()), '$SHP_NAME')"
+SQL_LOG_IMPORT="INSERT INTO $SCHEMA.deter_sar_import_log(imported_at, filename) VALUES (timezone('America/Sao_Paulo',now()), '$SHP_NAME')"
 # Find shapefile in log table
-SQL_CHECK_FILE="SELECT 'YES' FROM public.deter_sar_import_log WHERE filename = '$SHP_NAME'"
+SQL_CHECK_FILE="SELECT 'YES' FROM $SCHEMA.deter_sar_import_log WHERE filename = '$SHP_NAME'"
 # Options to create mode and default srid to input/output
 SHP2PGSQL_OPTIONS="-c -s 4326:4326 -W 'LATIN1' -g geometries"
 
@@ -52,18 +49,26 @@ then
   if [[ ! "YES" = "$SHP_MATCHED" ]];
   then
     # copy deter-sar file to keep as backup
-    cp -a $INPUT_DIR"/"$SHP_NAME".zip" "$SHARED_DIR/"
-    unzip -j $SHARED_DIR"/"$SHP_NAME".zip" -d "$SHARED_DIR/"
+    cp -a $INPUT_DIR"/"$SHP_NAME "$SHARED_DIR/"
+    unzip -j $SHARED_DIR"/"$SHP_NAME -d "$SHARED_DIR/"
+
+    # get file name without extension
+    SHP_NAME=${SHP_NAME%.*}
     # import shapefiles
-    if $PG_BIN/shp2pgsql $SHP2PGSQL_OPTIONS $SHARED_DIR"/"$SHP_NAME $OUTPUT_SOURCE_TABLE | $PG_BIN/psql $PG_CON
+    if $PG_BIN/shp2pgsql $SHP2PGSQL_OPTIONS $SHARED_DIR"/"$SHP_NAME $SCHEMA"."$OUTPUT_SOURCE_TABLE | $PG_BIN/psql $PG_CON
     then
         echo "$DATE_LOG - Import ($SHP_NAME) ... OK" >> "$SHARED_DIR/logs/import-shapefile.log"
         $PG_BIN/psql $PG_CON -t -c "$SQL_LOG_IMPORT"
         # remove uncompressed shp files
         rm ${SHARED_DIR}/${SHP_NAME}*.{shx,prj,shp,dbf,cpg,fix}
+        # remove trigger file
+        rm "$INPUT_DIR/trigger.txt"
+
+        # Copy new SAR data to a full data table
+        . ./copy_to_full_table.sh $OUTPUT_SOURCE_TABLE
 
         # process the difference between new SAR data and the production FM data
-        . ./make_diff_from_fm.sh $OUTPUT_SOURCE_TABLE
+        #. ./make_diff_from_fm.sh $OUTPUT_SOURCE_TABLE
     else
         echo "$DATE_LOG - Import ($SHP_NAME) ... FAIL" >>"$SHARED_DIR/logs/import-shapefile.log"
     fi
