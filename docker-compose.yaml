@@ -2,7 +2,7 @@ version: '2'
 
 services:
   import-amz-shp:
-    image: terrabrasilis/deter-sar-import-shp:v1.2.0
+    image: terrabrasilis/deter-sar-import-shp:v1.3.0
     container_name: import-amz-shp
     volumes:
       - /data/import-amz-shp-script:/data/files
