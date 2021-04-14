@@ -37,7 +37,7 @@ SQL_LOG_IMPORT="INSERT INTO $SCHEMA.deter_sar_import_log(imported_at, filename) 
 # Find shapefile in log table
 SQL_CHECK_FILE="SELECT 'YES' FROM $SCHEMA.deter_sar_import_log WHERE filename = '$SHP_NAME'"
 # Options to create mode and default srid to input/output
-SHP2PGSQL_OPTIONS="-c -s 4326:4326 -W 'LATIN1' -g geometries"
+SHP2PGSQL_OPTIONS="-c -s 4326:4674 -W 'LATIN1' -g geometries"
 
 # find the shapename into log table
 SHP_MATCHED=($($PG_BIN/psql $PG_CON -t -c "$SQL_CHECK_FILE"))
@@ -67,8 +67,12 @@ then
         # Copy new SAR data to a full data table
         . ./copy_to_full_table.sh $OUTPUT_SOURCE_TABLE
 
-        # process the difference between new SAR data and the production FM data
-        #. ./make_diff_from_fm.sh $OUTPUT_SOURCE_TABLE
+        # Make diff with DETER-B and copy new SAR data to a temporary data table
+        # Used by Maurano's script to compose with DETER-B and compute the speed of deforestation for IBAMA
+        . ./copy_to_ibama_schema.sh $OUTPUT_SOURCE_TABLE
+
+        # Clean intermediary table
+        . ./clean.sh $OUTPUT_SOURCE_TABLE
     else
         echo "$DATE_LOG - Import ($SHP_NAME) ... FAIL" >>"$SHARED_DIR/logs/import-shapefile.log"
     fi
