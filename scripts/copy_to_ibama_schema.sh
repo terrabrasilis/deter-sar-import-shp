@@ -10,12 +10,13 @@ PG_CON="-d $database -p $port -h $host"
 
 SCHEMA="deter_agregate"
 OUTPUT_FINAL_TABLE="deter_sar_1ha"
+BASE_SCHEMA="deter_sar"
 OUTPUT_SOURCE_TABLE="$1"
 
 # new index to improve diff
 CREATE_INDEX="""
 CREATE INDEX ${OUTPUT_SOURCE_TABLE}_idx_geom
-    ON $SCHEMA.$OUTPUT_SOURCE_TABLE USING gist
+    ON $BASE_SCHEMA.$OUTPUT_SOURCE_TABLE USING gist
     (geometries)
     TABLESPACE pg_default;
 """
@@ -35,12 +36,12 @@ CREATE TABLE $SCHEMA.deter_sar_without_overlap AS
      )
     ),
   a.geometries))).geom AS geom
-FROM $SCHEMA.$OUTPUT_SOURCE_TABLE a
+FROM $BASE_SCHEMA.$OUTPUT_SOURCE_TABLE a
 WHERE a.class='CLEAR_CUT';
 """
 
 UPDATE_AREA="""
-UPDATE $SCHEMA.deter_sar_without_overlap SET area_ha=ST_area(a.geom::geography)/10000;
+UPDATE $SCHEMA.deter_sar_without_overlap SET area_ha=ST_area(geom::geography)/10000;
 """
 
 # the 50 candidates by bigger areas
