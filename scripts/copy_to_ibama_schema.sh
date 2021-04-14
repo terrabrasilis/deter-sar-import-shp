@@ -44,28 +44,23 @@ UPDATE_AREA="""
 UPDATE $SCHEMA.deter_sar_without_overlap SET area_ha=ST_area(geom::geography)/10000;
 """
 
+COPY_ALL="""
+INSERT INTO $SCHEMA.$OUTPUT_FINAL_TABLE
+(geometries, n_alerts, daydetec, area_ha, label, class, auditar)
+SELECT ST_Multi(geom) as geometries, n_alerts, daydetec, area_ha, label, class, 0 as auditar
+FROM $SCHEMA.deter_sar_without_overlap
+"""
+
 # the 50 candidates by bigger areas
 LIMIT="50"
 CANDIDATES_BY_AREA="""
 WITH candidates_by_area AS (
-  SELECT ST_Multi(geom) as geometries,
-  n_alerts, daydetec, area_ha, label, class, 1 as auditar
-  FROM $SCHEMA.deter_sar_without_overlap
-  ORDER BY area_ha DESC
-  LIMIT $LIMIT
-) INSERT INTO $SCHEMA.$OUTPUT_FINAL_TABLE
-(geometries, n_alerts, daydetec, area_ha, label, class, auditar)
-SELECT geometries, n_alerts, daydetec, area_ha, label, class, auditar FROM candidates_by_area
-"""
-
-# remove from temporary table
-REMOVE_CANDIDATES_BY_AREA="""
-WITH candidates_by_area AS (
   SELECT gid, area_ha
-  FROM $SCHEMA.deter_sar_without_overlap
+  FROM $SCHEMA.$OUTPUT_FINAL_TABLE
   ORDER BY area_ha DESC
   LIMIT $LIMIT
-) DELETE FROM $SCHEMA.deter_sar_without_overlap
+)
+UPDATE $SCHEMA.$OUTPUT_FINAL_TABLE SET auditar=1
 WHERE gid IN (SELECT gid FROM candidates_by_area)
 """
 
@@ -73,15 +68,14 @@ WHERE gid IN (SELECT gid FROM candidates_by_area)
 LIMIT="150"
 CANDIDATES_BY_RANDOM="""
 WITH candidates_by_random AS (
-  SELECT ST_Multi(geom) as geometries,
-  n_alerts, daydetec, area_ha, label, class, 1 as auditar
-  FROM $SCHEMA.deter_sar_without_overlap
+  SELECT gid, area_ha
+  FROM $SCHEMA.$OUTPUT_FINAL_TABLE
+  WHERE auditar=0
   ORDER BY random()
   LIMIT $LIMIT
-) INSERT INTO $SCHEMA.$OUTPUT_FINAL_TABLE
-(geometries, n_alerts, daydetec, area_ha, label, class, auditar)
-SELECT geometries, n_alerts, daydetec, area_ha, label, class, auditar
-FROM candidates_by_random
+)
+UPDATE $SCHEMA.$OUTPUT_FINAL_TABLE SET auditar=1
+WHERE gid IN (SELECT gid FROM candidates_by_random)
 """
 
 DROP_TMP_TABLE="DROP TABLE $SCHEMA.deter_sar_without_overlap"
@@ -93,17 +87,17 @@ $PG_BIN/psql $PG_CON -t -c "$CREATE_TABLE"
 # update area
 $PG_BIN/psql $PG_CON -t -c "$UPDATE_AREA"
 
-# copy SAR data to output table (the first 50 candidates)
+# copy SAR data to output table
+$PG_BIN/psql $PG_CON -t -c "$COPY_ALL"
+echo "$DATE_LOG - Copy all alerts from the SAR data to $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
+
+# Update audit to 1 to the first 50 candidates
 $PG_BIN/psql $PG_CON -t -c "$CANDIDATES_BY_AREA"
-echo "$DATE_LOG - Copy the first 50 candidates from the SAR data to $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
+echo "$DATE_LOG - Define the first 50 candidates on $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
 
-# remove some data based on 50 candidates
-$PG_BIN/psql $PG_CON -t -c "$REMOVE_CANDIDATES_BY_AREA"
-echo "$DATE_LOG - Remove the 50 candidates from intermediary table" >> "$SHARED_DIR/logs/import-shapefile.log"
-
-# copy SAR data to output table (the random 150 candidates)
+# Update audit to 1 to the random 150 candidates
 $PG_BIN/psql $PG_CON -t -c "$CANDIDATES_BY_RANDOM"
-echo "$DATE_LOG - Copy the random 150 candidates from the SAR data to $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
+echo "$DATE_LOG - Define the random 150 candidates on $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
 
 # drop the intermediary table
 $PG_BIN/psql $PG_CON -t -c "$DROP_TMP_TABLE"
