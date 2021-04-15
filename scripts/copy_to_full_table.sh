@@ -12,10 +12,13 @@ SCHEMA="deter_sar"
 FULL_TABLE="deter_sar_amz"
 OUTPUT_SOURCE_TABLE="$1"
 
+REFERECE_YEAR_FOR_JDAY="2020-01-01"
+
 COPY_TO_FULL_TABLE="""
 INSERT INTO $SCHEMA.$FULL_TABLE
-(geometries, intensity, n_alerts, daydetec, area_ha, label, class)
-SELECT geometries, intensity, n_alerts, daydetec, area_ha, label, class
+(geometries, intensity, n_alerts, daydetec, area_ha, label, class, view_date)
+SELECT geometries, intensity, n_alerts, daydetec, area_ha, label, class,
+((('$REFERECE_YEAR_FOR_JDAY'::date) + (daydetec||' day')::interval)::date) as view_date
 FROM $SCHEMA.$OUTPUT_SOURCE_TABLE;
 """
 # copy SAR data to full AMZ output table
