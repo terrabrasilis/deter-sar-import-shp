@@ -28,7 +28,7 @@ CREATE TABLE $SCHEMA.deter_sar_without_overlap AS
   COALESCE(
     safe_diff(a.geometries,
       (SELECT st_union(st_buffer(b.geom,0.000000001))
-       FROM public.deter b
+       FROM $SCHEMA.deter b
        WHERE
         b.source='D'
 	      AND b.classname IN ('DESMATAMENTO_VEG','DESMATAMENTO_CR','MINERACAO')
@@ -57,6 +57,7 @@ CANDIDATES_BY_AREA="""
 WITH candidates_by_area AS (
   SELECT gid, area_ha
   FROM $SCHEMA.$OUTPUT_FINAL_TABLE
+  WHERE created_at=now()::date
   ORDER BY area_ha DESC
   LIMIT $LIMIT
 )
@@ -70,7 +71,8 @@ CANDIDATES_BY_RANDOM="""
 WITH candidates_by_random AS (
   SELECT gid, area_ha
   FROM $SCHEMA.$OUTPUT_FINAL_TABLE
-  WHERE auditar=0
+  WHERE created_at=now()::date
+  AND auditar=0
   ORDER BY random()
   LIMIT $LIMIT
 )
