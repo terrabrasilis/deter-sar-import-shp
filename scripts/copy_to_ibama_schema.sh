@@ -48,11 +48,11 @@ COPY_ALL="""
 INSERT INTO $SCHEMA.$OUTPUT_FINAL_TABLE
 (geometries, n_alerts, daydetec, area_ha, label, class, auditar)
 SELECT ST_Multi(geom) as geometries, n_alerts, daydetec, area_ha, label, class, 0 as auditar
-FROM $SCHEMA.deter_sar_without_overlap
+FROM $SCHEMA.deter_sar_without_overlap WHERE area_ha>=1;
 """
 
-# the 50 candidates by bigger areas
-LIMIT="50"
+# the 100 candidates by bigger areas
+LIMIT="100"
 CANDIDATES_BY_AREA="""
 WITH candidates_by_area AS (
   SELECT gid, area_ha
@@ -65,8 +65,8 @@ UPDATE $SCHEMA.$OUTPUT_FINAL_TABLE SET auditar=1
 WHERE gid IN (SELECT gid FROM candidates_by_area)
 """
 
-# the 150 candidates by random
-LIMIT="150"
+# the 300 candidates by random
+LIMIT="300"
 CANDIDATES_BY_RANDOM="""
 WITH candidates_by_random AS (
   SELECT gid, area_ha
@@ -93,13 +93,13 @@ $PG_BIN/psql $PG_CON -t -c "$UPDATE_AREA"
 $PG_BIN/psql $PG_CON -t -c "$COPY_ALL"
 echo "$DATE_LOG - Copy all alerts from the SAR data to $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
 
-# Update audit to 1 to the first 50 candidates
+# Update audit to 1 to the first 100 candidates
 $PG_BIN/psql $PG_CON -t -c "$CANDIDATES_BY_AREA"
-echo "$DATE_LOG - Define the first 50 candidates on $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
+echo "$DATE_LOG - Define the first 100 candidates on $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
 
-# Update audit to 1 to the random 150 candidates
+# Update audit to 1 to the random 300 candidates
 $PG_BIN/psql $PG_CON -t -c "$CANDIDATES_BY_RANDOM"
-echo "$DATE_LOG - Define the random 150 candidates on $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
+echo "$DATE_LOG - Define the random 300 candidates on $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
 
 # drop the intermediary table
 $PG_BIN/psql $PG_CON -t -c "$DROP_TMP_TABLE"
