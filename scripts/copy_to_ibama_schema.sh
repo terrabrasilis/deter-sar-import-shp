@@ -126,4 +126,5 @@ echo "$DATE_LOG - Define the random 300 candidates on $OUTPUT_INTERMEDIARY_TABLE
 $PG_BIN/psql $PG_CON -t -c "$DROP_TMP_TABLE"
 echo "$DATE_LOG - Drop intermediary tables ($DROP_TMP_TABLE)" >> "$SHARED_DIR/logs/import-shapefile.log"
 
-
+# send mail to team
+. ./send-mail.sh
