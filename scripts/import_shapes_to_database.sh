@@ -32,6 +32,11 @@ if [[ ! -f $INPUT_DIR"/"$SHP_NAME ]]; then
   exit
 fi
 
+# gen_random_uuid depends on the pgcrypto extension in some versions of PostgreSQL
+ADD_UUID="""
+ALTER TABLE $SCHEMA.$OUTPUT_SOURCE_TABLE
+ADD COLUMN uuid uuid NOT NULL DEFAULT gen_random_uuid();
+"""
 # Define SQL to log the success operation. Tips to select datetime as a string (to_char(timezone('America/Sao_Paulo',imported_at),'YYYY-MM-DD HH24:MI:SS'))
 SQL_LOG_IMPORT="INSERT INTO $SCHEMA.deter_sar_import_log(imported_at, filename) VALUES (timezone('America/Sao_Paulo',now()), '$SHP_NAME')"
 # Find shapefile in log table
@@ -59,6 +64,7 @@ then
     then
         echo "$DATE_LOG - Import ($SHP_NAME) ... OK" >> "$SHARED_DIR/logs/import-shapefile.log"
         $PG_BIN/psql $PG_CON -t -c "$SQL_LOG_IMPORT"
+        $PG_BIN/psql $PG_CON -t -c "$ADD_UUID"
         # remove uncompressed shp files
         rm ${SHARED_DIR}/${SHP_NAME}*.{shx,prj,shp,dbf,cpg,fix}
         # remove trigger file
