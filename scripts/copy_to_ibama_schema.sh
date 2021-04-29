@@ -3,7 +3,9 @@ host=$(cat $SHARED_DIR/pgconfig | grep -oP '(?<=host=[^*])[^"]*')
 port=$(cat $SHARED_DIR/pgconfig | grep -oP '(?<=port=[^*])[^"]*')
 database=$(cat $SHARED_DIR/pgconfig | grep -oP '(?<=database=[^*])[^"]*')
 
-DATE_LOG=$(date +"%Y-%m-%d_%H:%M:%S")
+DATE_TIME_LOG=$(date +"%Y-%m-%d_%H:%M:%S")
+DATE_LOG=$(date +%Y-%m-%d)
+LOGFILE="import_shapefile_$DATE_LOG.log"
 
 PG_BIN="/usr/bin"
 PG_CON="-d $database -p $port -h $host"
@@ -94,7 +96,7 @@ WHERE class='DEGRADATION';
 COPY_TO_FINAL_TABLE="""
 INSERT INTO $SCHEMA.$OUTPUT_FINAL_TABLE
 (uuid, classname, geom, satellite, sensor, source, view_date, areatotalkm, areamunkm, created_at, auditar)
-SELECT uuid, class, geom, 'Sentinel-1' as satellite, 'C-SAR' as sensor, 'S' as source,
+SELECT uuid, class, geometries, 'Sentinel-1' as satellite, 'C-SAR' as sensor, 'S' as source,
 ((('$REFERECE_YEAR_FOR_JDAY'::date) + (daydetec||' day')::interval)::date) as view_date,
 area_ha/100 as areatotalkm, area_ha/100 as areamunkm, created_at, auditar
 FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
@@ -112,19 +114,35 @@ $PG_BIN/psql $PG_CON -t -c "$UPDATE_AREA"
 
 # copy SAR data to output table
 $PG_BIN/psql $PG_CON -t -c "$COPY_ALL"
-echo "$DATE_LOG - Copy all alerts from the SAR data to $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
+echo "$DATE_TIME_LOG - Copy all alerts from the SAR data to $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
 
 # Update audit to 1 to the first 100 candidates
 $PG_BIN/psql $PG_CON -t -c "$CANDIDATES_BY_AREA"
-echo "$DATE_LOG - Define the first 100 candidates on $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
+echo "$DATE_TIME_LOG - Define the first 100 candidates on $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
 
 # Update audit to 1 to the random 300 candidates
 $PG_BIN/psql $PG_CON -t -c "$CANDIDATES_BY_RANDOM"
-echo "$DATE_LOG - Define the random 300 candidates on $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
+echo "$DATE_TIME_LOG - Define the random 300 candidates on $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
 
-# drop the intermediary table
+# Update the class name CLEAR_CUT to DESMATAMENTO_CR
+$PG_BIN/psql $PG_CON -t -c "$MAP_CLASS_NAME_CLEAR_CUT"
+echo "$DATE_TIME_LOG - Update the class name CLEAR_CUT to DESMATAMENTO_CR on $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
+
+# Update the class name DEGRADATION to DESMATAMENTO_VEG
+$PG_BIN/psql $PG_CON -t -c "$MAP_CLASS_NAME_DEGRADATION"
+echo "$DATE_TIME_LOG - Update the class name DEGRADATION to DESMATAMENTO_VEG on $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
+
+# Copy data to final table
+$PG_BIN/psql $PG_CON -t -c "$COPY_TO_FINAL_TABLE"
+echo "$DATE_TIME_LOG - Copy data from $OUTPUT_INTERMEDIARY_TABLE to $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
+
+# delete the intermediary data
+$PG_BIN/psql $PG_CON -t -c "$DELETE_INTERMEDIARY_DATA"
+echo "$DATE_TIME_LOG - DELETE all data from the intermediary table ($OUTPUT_INTERMEDIARY_TABLE)" >> "$SHARED_DIR/logs/$LOGFILE"
+
+# drop the temporary table
 $PG_BIN/psql $PG_CON -t -c "$DROP_TMP_TABLE"
-echo "$DATE_LOG - Drop intermediary tables ($DROP_TMP_TABLE)" >> "$SHARED_DIR/logs/import-shapefile.log"
+echo "$DATE_TIME_LOG - Drop the temporary table (deter_sar_without_overlap)" >> "$SHARED_DIR/logs/$LOGFILE"
 
-# send mail to team
+# send mail to team based on "$SHARED_DIR"/mail_to.cfg file
 . ./send-mail.sh
