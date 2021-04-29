@@ -6,13 +6,13 @@ database=$(cat $SHARED_DIR/pgconfig | grep -oP '(?<=database=[^*])[^"]*')
 DATE_TIME_LOG=$(date +"%Y-%m-%d_%H:%M:%S")
 DATE_LOG=$(date +%Y-%m-%d)
 LOGFILE="import_shapefile_$DATE_LOG.log"
+MAIL_BODY="mail_body_$DATE_LOG"
 
 PG_BIN="/usr/bin"
 PG_CON="-d $database -p $port -h $host"
 
 SCHEMA="deter_agregate"
 OUTPUT_FINAL_TABLE="deter" # final data table used to send shapefile to the IBAMA
-OUTPUT_INTERMEDIARY_TABLE="deter_sar_1ha"
 BASE_SCHEMA="deter_sar"
 OUTPUT_SOURCE_TABLE="$1"
 
@@ -23,87 +23,105 @@ CREATE INDEX ${OUTPUT_SOURCE_TABLE}_idx_geom
     (geometries)
     TABLESPACE pg_default;
 """
-# to process the difference between new SAR data and the production DETER-B data
+
+# Compute difference between DETER_R and DETER_B
 CREATE_TABLE="""
-CREATE TABLE $SCHEMA.deter_sar_without_overlap AS
-  SELECT uuid, gid, n_alerts, daydetec, area_ha, label, class,
-  (st_dump(
-  COALESCE(
-    safe_diff(a.geometries,
-      (SELECT st_union(st_buffer(b.geom,0.000000001))
-       FROM $SCHEMA.deter b
-       WHERE
-        b.source='D'
-	      AND b.classname IN ('DESMATAMENTO_VEG','DESMATAMENTO_CR','MINERACAO')
-        AND (a.geometries && b.geom)
-     )
-    ),
-  a.geometries))).geom AS geom
+CREATE TABLE $SCHEMA.by_percentage_of_coverage AS
+SELECT null::integer as auditar, null::date as date_audit, intensity,
+    n_alerts, daydetec, area_ha, label, class, created_at, view_date, uuid,
+	  (ST_Multi(ST_CollectionExtract(
+		COALESCE(
+		  safe_diff(a.geometries,
+			( SELECT st_union(st_buffer(b.geom,0.000000001))
+			  FROM $SCHEMA.deter b
+			  WHERE
+				b.source='D'
+				AND b.classname IN ('DESMATAMENTO_VEG','DESMATAMENTO_CR','MINERACAO')
+				AND (a.geometries && b.geom)
+			)
+		  ),
+		  a.geometries
+		)
+	  ,3))
+	  ) AS geom_diff,
+	  a.geometries as geom_original
 FROM $BASE_SCHEMA.$OUTPUT_SOURCE_TABLE a;
 """
 
 UPDATE_AREA="""
-UPDATE $SCHEMA.deter_sar_without_overlap SET area_ha=ST_area(geom::geography)/10000;
+UPDATE $SCHEMA.by_percentage_of_coverage SET area_ha=ST_area(geom_original::geography)/10000;
 """
 
-COPY_ALL="""
-INSERT INTO $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
-(geometries, n_alerts, daydetec, area_ha, label, class, auditar, uuid)
-SELECT ST_Multi(geom) as geometries, n_alerts, daydetec, area_ha, label, class, 0 as auditar, uuid
-FROM $SCHEMA.deter_sar_without_overlap WHERE area_ha>=1;
+# DETER_R alerts are marked as audited by default when DETER_B coverage is greater than or equal to 50% 
+THRESHOLD="0.5"
+WITHOUT_AUDIT="""
+WITH calculate_area AS (
+	SELECT ST_Area(geom_diff::geography)/10000 as area_diff,ST_Area(geom_original::geography)/10000 as area_original, uuid
+	FROM $SCHEMA.by_percentage_of_coverage
+)
+UPDATE $SCHEMA.by_percentage_of_coverage
+SET auditar=0, date_audit=now()::date
+FROM calculate_area b
+WHERE $SCHEMA.by_percentage_of_coverage.uuid=b.uuid AND b.area_diff < (b.area_original*$THRESHOLD)
 """
 
 # the 100 candidates by bigger areas
 LIMIT="100"
 CANDIDATES_BY_AREA="""
-WITH candidates_by_area AS (
-  SELECT gid, area_ha
-  FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
-  WHERE created_at=now()::date
-  ORDER BY area_ha DESC
-  LIMIT $LIMIT
+UPDATE $SCHEMA.by_percentage_of_coverage
+SET auditar=1
+WHERE uuid IN (
+	SELECT uuid FROM $SCHEMA.by_percentage_of_coverage
+  WHERE auditar IS NULL AND date_audit IS NULL ORDER BY area_ha DESC LIMIT $LIMIT
 )
-UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE SET auditar=1
-WHERE gid IN (SELECT gid FROM candidates_by_area)
 """
 
 # the 300 candidates by random
 LIMIT="300"
 CANDIDATES_BY_RANDOM="""
-WITH candidates_by_random AS (
-  SELECT gid, area_ha
-  FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
-  WHERE created_at=now()::date
-  AND auditar=0
-  ORDER BY random()
-  LIMIT $LIMIT
+UPDATE $SCHEMA.by_percentage_of_coverage
+SET auditar=1
+WHERE uuid IN (
+	SELECT uuid FROM $SCHEMA.by_percentage_of_coverage
+  WHERE auditar IS NULL AND date_audit IS NULL ORDER BY random() LIMIT $LIMIT
 )
-UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE SET auditar=1
-WHERE gid IN (SELECT gid FROM candidates_by_random)
+"""
+
+# change the class column to accept updating the class name
+ALTER_CLASS_COL="""
+ALTER TABLE $SCHEMA.by_percentage_of_coverage
+ALTER COLUMN class TYPE character varying(50);
 """
 
 MAP_CLASS_NAME_CLEAR_CUT="""
-UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE SET class='DESMATAMENTO_CR'
+UPDATE $SCHEMA.by_percentage_of_coverage SET class='DESMATAMENTO_CR'
 WHERE class='CLEAR_CUT';
 """
 
 MAP_CLASS_NAME_DEGRADATION="""
-UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE SET class='DESMATAMENTO_VEG'
+UPDATE $SCHEMA.by_percentage_of_coverage SET class='DESMATAMENTO_VEG'
 WHERE class='DEGRADATION';
 """
 
 # copy to final table OUTPUT_FINAL_TABLE
 COPY_TO_FINAL_TABLE="""
 INSERT INTO $SCHEMA.$OUTPUT_FINAL_TABLE
-(uuid, classname, geom, satellite, sensor, source, view_date, areatotalkm, areamunkm, created_at, auditar)
-SELECT uuid, class, geometries, 'Sentinel-1' as satellite, 'C-SAR' as sensor, 'S' as source,
-((('$REFERECE_YEAR_FOR_JDAY'::date) + (daydetec||' day')::interval)::date) as view_date,
-area_ha/100 as areatotalkm, area_ha/100 as areamunkm, created_at, auditar
-FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
+(uuid, classname, geom, satellite, sensor, source, view_date, areatotalkm, areamunkm, created_at, auditar, date_audit)
+SELECT uuid, class, geom_original as geom, 'Sentinel-1' as satellite, 'C-SAR' as sensor, 'S' as source,
+((('2020-01-01'::date) + (daydetec||' day')::interval)::date) as view_date,
+area_ha/100 as areatotalkm, area_ha/100 as areamunkm, created_at, auditar, date_audit
+FROM $SCHEMA.by_percentage_of_coverage
 """
 
-DELETE_INTERMEDIARY_DATA="DELETE FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE"
-DROP_TMP_TABLE="DROP TABLE $SCHEMA.deter_sar_without_overlap"
+DROP_TMP_TABLE="DROP TABLE $SCHEMA.by_percentage_of_coverage"
+
+# result to send inside email
+SELECT_RESULT="""
+SELECT classname, (CASE WHEN auditar=1 THEN 'SIM' ELSE 'NAO' END) as auditar, count(*) as num_pols
+FROM $SCHEMA.$OUTPUT_FINAL_TABLE
+WHERE created_at>=now()::date and source='S'
+GROUP BY 1,2
+"""
 
 # create index to improve diff process 
 $PG_BIN/psql $PG_CON -t -c "$CREATE_INDEX"
@@ -112,17 +130,21 @@ $PG_BIN/psql $PG_CON -t -c "$CREATE_TABLE"
 # update area
 $PG_BIN/psql $PG_CON -t -c "$UPDATE_AREA"
 
-# copy SAR data to output table
-$PG_BIN/psql $PG_CON -t -c "$COPY_ALL"
-echo "$DATE_TIME_LOG - Copy all alerts from the SAR data to $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
+# Marked as audited by default when coverage is greater than or equal to 50% (auditar=1)
+$PG_BIN/psql $PG_CON -t -c "$WITHOUT_AUDIT"
+echo "$DATE_TIME_LOG - Marked as audited by default when coverage is greater than or equal to 50%" >> "$SHARED_DIR/logs/$LOGFILE"
 
 # Update audit to 1 to the first 100 candidates
 $PG_BIN/psql $PG_CON -t -c "$CANDIDATES_BY_AREA"
-echo "$DATE_TIME_LOG - Define the first 100 candidates on $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
+echo "$DATE_TIME_LOG - Define the first 100 candidates" >> "$SHARED_DIR/logs/$LOGFILE"
 
 # Update audit to 1 to the random 300 candidates
 $PG_BIN/psql $PG_CON -t -c "$CANDIDATES_BY_RANDOM"
-echo "$DATE_TIME_LOG - Define the random 300 candidates on $OUTPUT_INTERMEDIARY_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
+echo "$DATE_TIME_LOG - Define the random 300 candidates" >> "$SHARED_DIR/logs/$LOGFILE"
+
+# Change class column
+$PG_BIN/psql $PG_CON -t -c "$ALTER_CLASS_COL"
+echo "$DATE_TIME_LOG - Change the class column to accept updating the class name" >> "$SHARED_DIR/logs/$LOGFILE"
 
 # Update the class name CLEAR_CUT to DESMATAMENTO_CR
 $PG_BIN/psql $PG_CON -t -c "$MAP_CLASS_NAME_CLEAR_CUT"
@@ -136,13 +158,14 @@ echo "$DATE_TIME_LOG - Update the class name DEGRADATION to DESMATAMENTO_VEG on 
 $PG_BIN/psql $PG_CON -t -c "$COPY_TO_FINAL_TABLE"
 echo "$DATE_TIME_LOG - Copy data from $OUTPUT_INTERMEDIARY_TABLE to $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
 
-# delete the intermediary data
-$PG_BIN/psql $PG_CON -t -c "$DELETE_INTERMEDIARY_DATA"
-echo "$DATE_TIME_LOG - DELETE all data from the intermediary table ($OUTPUT_INTERMEDIARY_TABLE)" >> "$SHARED_DIR/logs/$LOGFILE"
-
 # drop the temporary table
 $PG_BIN/psql $PG_CON -t -c "$DROP_TMP_TABLE"
-echo "$DATE_TIME_LOG - Drop the temporary table (deter_sar_without_overlap)" >> "$SHARED_DIR/logs/$LOGFILE"
+echo "$DATE_TIME_LOG - Drop the temporary table (by_percentage_of_coverage)" >> "$SHARED_DIR/logs/$LOGFILE"
+
+# read the final data table to send over email
+PRINT_AUDIT_DATA=($($PG_BIN/psql $PG_CON -c "$SELECT_RESULT"))
+echo "-----------------------------------------" >> "$SHARED_DIR/logs/$MAIL_BODY"
+echo "$PRINT_AUDIT_DATA" >> "$SHARED_DIR/logs/$MAIL_BODY"
 
 # send mail to team based on "$SHARED_DIR"/mail_to.cfg file
-. ./send-mail.sh
+. ./send-mail.sh "$SHARED_DIR/logs/$MAIL_BODY"
