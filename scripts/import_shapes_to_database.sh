@@ -13,22 +13,23 @@ export PGPASSWORD=$pass
 
 PG_BIN="/usr/bin"
 PG_CON="-d $database -p $port -h $host"
+OGR_PG_CON="dbname='$database' host='$host' port='$port' user='$user' password='$pass'"
 
 echo
 echo "=========================== $DATE_LOG ==========================="
 
-# try read shapefile name from trigger file
+# try read input file name from trigger file
 if [[ -f "$INPUT_DIR/trigger.txt" ]];
 then
-  # get shapefile name
-  SHP_NAME=$(cat $INPUT_DIR/trigger.txt)
+  # get input file name
+  INPUT_FILE=$(cat $INPUT_DIR/trigger.txt)
 else
   # hasn't a trigger file, aborting
   exit
 fi
 
-if [[ ! -f $INPUT_DIR"/"$SHP_NAME ]]; then
-  echo "$DATE_LOG - Cannot find SHP($SHP_NAME), aborting..."
+if [[ ! -f $INPUT_DIR"/"$INPUT_FILE ]]; then
+  echo "$DATE_LOG - Cannot find INPUT_FILE($INPUT_FILE), aborting..."
   exit
 fi
 
@@ -38,11 +39,11 @@ ALTER TABLE $SCHEMA.$OUTPUT_SOURCE_TABLE
 ADD COLUMN uuid uuid NOT NULL DEFAULT gen_random_uuid();
 """
 # Define SQL to log the success operation. Tips to select datetime as a string (to_char(timezone('America/Sao_Paulo',imported_at),'YYYY-MM-DD HH24:MI:SS'))
-SQL_LOG_IMPORT="INSERT INTO $SCHEMA.deter_sar_import_log(imported_at, filename) VALUES (timezone('America/Sao_Paulo',now()), '$SHP_NAME')"
-# Find shapefile in log table
-SQL_CHECK_FILE="SELECT 'YES' FROM $SCHEMA.deter_sar_import_log WHERE filename = '$SHP_NAME'"
+SQL_LOG_IMPORT="INSERT INTO $SCHEMA.deter_sar_import_log(imported_at, filename) VALUES (timezone('America/Sao_Paulo',now()), '$INPUT_FILE')"
+# Find input file in log table
+SQL_CHECK_FILE="SELECT 'YES' FROM $SCHEMA.deter_sar_import_log WHERE filename = '$INPUT_FILE'"
 # Options to create mode and default srid to input/output
-SHP2PGSQL_OPTIONS="-c -s 4326:4674 -W 'LATIN1' -g geometries"
+OGR_OPTIONS="-lco GEOMETRY_NAME=geometries -nln $SCHEMA.$OUTPUT_SOURCE_TABLE"
 
 # find the shapename into log table
 SHP_MATCHED=($($PG_BIN/psql $PG_CON -t -c "$SQL_CHECK_FILE"))
@@ -54,19 +55,14 @@ then
   if [[ ! "YES" = "$SHP_MATCHED" ]];
   then
     # copy deter-sar file to keep as backup
-    cp -a $INPUT_DIR"/"$SHP_NAME "$SHARED_DIR/"
-    unzip -j $SHARED_DIR"/"$SHP_NAME -d "$SHARED_DIR/"
+    cp -a $INPUT_DIR"/"$INPUT_FILE "$SHARED_DIR/"
 
-    # get file name without extension
-    SHP_NAME=${SHP_NAME%.*}
-    # import shapefiles
-    if $PG_BIN/shp2pgsql $SHP2PGSQL_OPTIONS $SHARED_DIR"/"$SHP_NAME $SCHEMA"."$OUTPUT_SOURCE_TABLE | $PG_BIN/psql $PG_CON
+    # import input file
+    if $PG_BIN/ogr2ogr -f "PostgreSQL" PG:"$OGR_PG_CON" $SHARED_DIR"/"$INPUT_FILE $OGR_OPTIONS
     then
-        echo "$DATE_LOG - Import ($SHP_NAME) ... OK" >> "$SHARED_DIR/logs/import-shapefile.log"
+        echo "$DATE_LOG - Import ($INPUT_FILE) ... OK" >> "$SHARED_DIR/logs/import-input-file.log"
         $PG_BIN/psql $PG_CON -t -c "$SQL_LOG_IMPORT"
         $PG_BIN/psql $PG_CON -t -c "$ADD_UUID"
-        # remove uncompressed shp files
-        rm ${SHARED_DIR}/${SHP_NAME}*.{shx,prj,shp,dbf,cpg,fix}
         # remove trigger file
         rm "$INPUT_DIR/trigger.txt"
 
@@ -80,10 +76,10 @@ then
         # Clean intermediary table
         . ./clean.sh $OUTPUT_SOURCE_TABLE
     else
-        echo "$DATE_LOG - Import ($SHP_NAME) ... FAIL" >>"$SHARED_DIR/logs/import-shapefile.log"
+        echo "$DATE_LOG - Import ($INPUT_FILE) ... FAIL" >>"$SHARED_DIR/logs/import-input-file.log"
     fi
   else
-    echo "$DATE_LOG - The SHP($SHP_NAME) has been imported before." >> "$SHARED_DIR/logs/import-shapefile.log"
+    echo "$DATE_LOG - The INPUT_FILE($INPUT_FILE) has been imported before." >> "$SHARED_DIR/logs/import-input-file.log"
   fi
 
 else

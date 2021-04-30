@@ -28,7 +28,7 @@ CREATE INDEX ${OUTPUT_SOURCE_TABLE}_idx_geom
 CREATE_TABLE="""
 CREATE TABLE $SCHEMA.by_percentage_of_coverage AS
 SELECT null::integer as auditar, null::date as date_audit, intensity,
-    n_alerts, daydetec, area_ha, label, class, created_at, view_date, uuid,
+    n_alerts, daydetec, area_ha, label, class, now()::date as created_at, uuid,
 	  (ST_Multi(ST_CollectionExtract(
 		COALESCE(
 		  safe_diff(a.geometries,
@@ -117,10 +117,9 @@ DROP_TMP_TABLE="DROP TABLE $SCHEMA.by_percentage_of_coverage"
 
 # result to send inside email
 SELECT_RESULT="""
-SELECT classname, (CASE WHEN auditar=1 THEN 'SIM' ELSE 'NAO' END) as auditar, count(*) as num_pols
+SELECT count(*) 
 FROM $SCHEMA.$OUTPUT_FINAL_TABLE
-WHERE created_at>=now()::date and source='S'
-GROUP BY 1,2
+WHERE created_at>=now()::date and source='S' and auditar=1
 """
 
 # create index to improve diff process 
@@ -164,8 +163,12 @@ echo "$DATE_TIME_LOG - Drop the temporary table (by_percentage_of_coverage)" >> 
 
 # read the final data table to send over email
 PRINT_AUDIT_DATA=($($PG_BIN/psql $PG_CON -c "$SELECT_RESULT"))
-echo "-----------------------------------------" >> "$SHARED_DIR/logs/$MAIL_BODY"
-echo "$PRINT_AUDIT_DATA" >> "$SHARED_DIR/logs/$MAIL_BODY"
+echo "Caro usuário," > "$SHARED_DIR/logs/$MAIL_BODY"
+echo "Foram liberados $PRINT_AUDIT_DATA poligonos para auditar" >> "$SHARED_DIR/logs/$MAIL_BODY"
+echo "" >> "$SHARED_DIR/logs/$MAIL_BODY"
+echo "Acesse: http://www.dpi.inpe.br/fipcerrado/detersar/" >> "$SHARED_DIR/logs/$MAIL_BODY"
+echo "" >> "$SHARED_DIR/logs/$MAIL_BODY"
+echo "Att.: TerraBrasilis team" >> "$SHARED_DIR/logs/$MAIL_BODY"
 
 # send mail to team based on "$SHARED_DIR"/mail_to.cfg file
 . ./send-mail.sh "$SHARED_DIR/logs/$MAIL_BODY"

@@ -23,4 +23,4 @@ FROM $SCHEMA.$OUTPUT_SOURCE_TABLE;
 """
 # copy SAR data to full AMZ output table
 $PG_BIN/psql $PG_CON -t -c "$COPY_TO_FULL_TABLE"
-echo "$DATE_LOG - Copy SAR data to $SCHEMA.$FULL_TABLE" >> "$SHARED_DIR/logs/import-shapefile.log"
+echo "$DATE_LOG - Copy SAR data to $SCHEMA.$FULL_TABLE" >> "$SHARED_DIR/logs/import-input-file.log"
