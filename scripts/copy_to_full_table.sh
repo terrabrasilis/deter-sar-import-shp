@@ -17,7 +17,7 @@ REFERECE_YEAR_FOR_JDAY="2020-01-01"
 COPY_TO_FULL_TABLE="""
 INSERT INTO $SCHEMA.$FULL_TABLE
 (geometries, intensity, n_alerts, daydetec, area_ha, label, class, view_date, uuid)
-SELECT geometries, intensity, n_alerts, daydetec, area_ha, label, class,
+SELECT ST_Multi(geometries), intensity, n_alerts, daydetec, area_ha, label, class,
 ((('$REFERECE_YEAR_FOR_JDAY'::date) + (daydetec||' day')::interval)::date) as view_date, uuid
 FROM $SCHEMA.$OUTPUT_SOURCE_TABLE;
 """
