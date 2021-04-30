@@ -16,7 +16,7 @@ br.inpe.dpi.terrabrasilis="script-tasks" \
 version=${VERSION} \
 author="Andre Carvalho" \
 author.email="andre.carvalho@inpe.br" \
-description="Scripts to import SHAPE files from disk to database table on Postgres"
+description="Scripts for importing geographic data files from disk to the database table in PostGIS."
 #-------------Application Specific Stuff ----------------------------------------------------
 
 RUN apt-get -o Acquire::ForceIPv4=true update \
