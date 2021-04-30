@@ -43,7 +43,7 @@ SQL_LOG_IMPORT="INSERT INTO $SCHEMA.deter_sar_import_log(imported_at, filename) 
 # Find input file in log table
 SQL_CHECK_FILE="SELECT 'YES' FROM $SCHEMA.deter_sar_import_log WHERE filename = '$INPUT_FILE'"
 # Options to create mode and default srid to input/output
-OGR_OPTIONS="-lco GEOMETRY_NAME=geometries -nln $SCHEMA.$OUTPUT_SOURCE_TABLE"
+OGR_OPTIONS="-t_srs EPSG:4674 -lco GEOMETRY_NAME=geometries -nln $SCHEMA.$OUTPUT_SOURCE_TABLE"
 
 # find the shapename into log table
 SHP_MATCHED=($($PG_BIN/psql $PG_CON -t -c "$SQL_CHECK_FILE"))
