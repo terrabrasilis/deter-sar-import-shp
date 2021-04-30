@@ -5,7 +5,7 @@ database=$(cat $SHARED_DIR/pgconfig | grep -oP '(?<=database=[^*])[^"]*')
 
 DATE_TIME_LOG=$(date +"%Y-%m-%d_%H:%M:%S")
 DATE_LOG=$(date +%Y-%m-%d)
-LOGFILE="import_shapefile_$DATE_LOG.log"
+LOGFILE="copy_to_ibama_$DATE_LOG.log"
 MAIL_BODY="mail_body_$DATE_LOG"
 
 PG_BIN="/usr/bin"
@@ -13,6 +13,8 @@ PG_CON="-d $database -p $port -h $host"
 
 SCHEMA="deter_agregate"
 OUTPUT_FINAL_TABLE="deter" # final data table used to send shapefile to the IBAMA
+AUDITED_TABLE="deter_sar_1ha_validados"
+OUTPUT_INTERMEDIARY_TABLE="by_percentage_of_coverage"
 BASE_SCHEMA="deter_sar"
 OUTPUT_SOURCE_TABLE="$1"
 
@@ -26,8 +28,8 @@ CREATE INDEX ${OUTPUT_SOURCE_TABLE}_idx_geom
 
 # Compute difference between DETER_R and DETER_B
 CREATE_TABLE="""
-CREATE TABLE $SCHEMA.by_percentage_of_coverage AS
-SELECT null::integer as auditar, null::date as date_audit, intensity,
+CREATE TABLE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE AS
+SELECT ''::character varying as nome_avaliador, null::integer as auditar, null::date as date_audit, intensity,
     n_alerts, daydetec, area_ha, label, class, now()::date as created_at, uuid,
 	  (ST_Multi(ST_CollectionExtract(
 		COALESCE(
@@ -49,7 +51,7 @@ FROM $BASE_SCHEMA.$OUTPUT_SOURCE_TABLE a;
 """
 
 UPDATE_AREA="""
-UPDATE $SCHEMA.by_percentage_of_coverage SET area_ha=ST_area(geom_original::geography)/10000;
+UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE SET area_ha=ST_area(geom_original::geography)/10000;
 """
 
 # DETER_R alerts are marked as audited by default when DETER_B coverage is greater than or equal to 50% 
@@ -57,21 +59,21 @@ THRESHOLD="0.5"
 WITHOUT_AUDIT="""
 WITH calculate_area AS (
 	SELECT ST_Area(geom_diff::geography)/10000 as area_diff,ST_Area(geom_original::geography)/10000 as area_original, uuid
-	FROM $SCHEMA.by_percentage_of_coverage
+	FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
 )
-UPDATE $SCHEMA.by_percentage_of_coverage
-SET auditar=0, date_audit=now()::date
+UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
+SET auditar=0, date_audit=now()::date, nome_avaliador='automatico'
 FROM calculate_area b
-WHERE $SCHEMA.by_percentage_of_coverage.uuid=b.uuid AND b.area_diff < (b.area_original*$THRESHOLD)
+WHERE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE.uuid=b.uuid AND b.area_diff < (b.area_original*$THRESHOLD)
 """
 
 # the 100 candidates by bigger areas
 LIMIT="100"
 CANDIDATES_BY_AREA="""
-UPDATE $SCHEMA.by_percentage_of_coverage
+UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
 SET auditar=1
 WHERE uuid IN (
-	SELECT uuid FROM $SCHEMA.by_percentage_of_coverage
+	SELECT uuid FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
   WHERE auditar IS NULL AND date_audit IS NULL ORDER BY area_ha DESC LIMIT $LIMIT
 )
 """
@@ -79,27 +81,27 @@ WHERE uuid IN (
 # the 300 candidates by random
 LIMIT="300"
 CANDIDATES_BY_RANDOM="""
-UPDATE $SCHEMA.by_percentage_of_coverage
+UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
 SET auditar=1
 WHERE uuid IN (
-	SELECT uuid FROM $SCHEMA.by_percentage_of_coverage
+	SELECT uuid FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
   WHERE auditar IS NULL AND date_audit IS NULL ORDER BY random() LIMIT $LIMIT
 )
 """
 
 # change the class column to accept updating the class name
 ALTER_CLASS_COL="""
-ALTER TABLE $SCHEMA.by_percentage_of_coverage
+ALTER TABLE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
 ALTER COLUMN class TYPE character varying(50);
 """
 
 MAP_CLASS_NAME_CLEAR_CUT="""
-UPDATE $SCHEMA.by_percentage_of_coverage SET class='DESMATAMENTO_CR'
+UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE SET class='DESMATAMENTO_CR'
 WHERE class='CLEAR_CUT';
 """
 
 MAP_CLASS_NAME_DEGRADATION="""
-UPDATE $SCHEMA.by_percentage_of_coverage SET class='DESMATAMENTO_VEG'
+UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE SET class='DESMATAMENTO_VEG'
 WHERE class='DEGRADATION';
 """
 
@@ -108,12 +110,23 @@ COPY_TO_FINAL_TABLE="""
 INSERT INTO $SCHEMA.$OUTPUT_FINAL_TABLE
 (uuid, classname, geom, satellite, sensor, source, view_date, areatotalkm, areamunkm, created_at, auditar, date_audit)
 SELECT uuid, class, geom_original as geom, 'Sentinel-1' as satellite, 'C-SAR' as sensor, 'S' as source,
-((('2020-01-01'::date) + (daydetec||' day')::interval)::date) as view_date,
+((('$REFERECE_YEAR_FOR_JDAY'::date) + (daydetec||' day')::interval)::date) as view_date,
 area_ha/100 as areatotalkm, area_ha/100 as areamunkm, created_at, auditar, date_audit
-FROM $SCHEMA.by_percentage_of_coverage
+FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
 """
 
-DROP_TMP_TABLE="DROP TABLE $SCHEMA.by_percentage_of_coverage"
+# copy the automated audited entries to the audited table
+COPY_TO_ADITED="""
+INSERT INTO $SCHEMA.$AUDITED_TABLE(
+uuid, lon, lat, area_ha, view_date, classname, nome_avaliador, classe_avaliador, data_avaliacao, geom, created_at)
+SELECT uuid, ST_X(ST_Centroid(geom_original)) as lon, ST_Y(ST_Centroid(geom_original)) as lat, area_ha,
+((('$REFERECE_YEAR_FOR_JDAY'::date) + (daydetec||' day')::interval)::date) as view_date,
+class, nome_avaliador, class, date_audit, geom_original as geom, created_at
+FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
+WHERE auditar=0 AND date_audit IS NOT NULL;
+"""
+
+DROP_TMP_TABLE="DROP TABLE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE"
 
 # result to send inside email
 SELECT_RESULT="""
@@ -157,13 +170,17 @@ echo "$DATE_TIME_LOG - Update the class name DEGRADATION to DESMATAMENTO_VEG on 
 $PG_BIN/psql $PG_CON -t -c "$COPY_TO_FINAL_TABLE"
 echo "$DATE_TIME_LOG - Copy data from $OUTPUT_INTERMEDIARY_TABLE to $OUTPUT_FINAL_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
 
+# Copy the auto audited data to the audited table
+$PG_BIN/psql $PG_CON -t -c "$COPY_TO_ADITED"
+echo "$DATE_TIME_LOG - Copy data from $OUTPUT_INTERMEDIARY_TABLE to $AUDITED_TABLE" >> "$SHARED_DIR/logs/$LOGFILE"
+
 # drop the temporary table
 $PG_BIN/psql $PG_CON -t -c "$DROP_TMP_TABLE"
-echo "$DATE_TIME_LOG - Drop the temporary table (by_percentage_of_coverage)" >> "$SHARED_DIR/logs/$LOGFILE"
+echo "$DATE_TIME_LOG - Drop the temporary table ($OUTPUT_INTERMEDIARY_TABLE)" >> "$SHARED_DIR/logs/$LOGFILE"
 
 # read the final data table to send over email
-PRINT_AUDIT_DATA=($($PG_BIN/psql $PG_CON -c "$SELECT_RESULT"))
-echo "Caro usuário," > "$SHARED_DIR/logs/$MAIL_BODY"
+PRINT_AUDIT_DATA=($($PG_BIN/psql $PG_CON -At -c "$SELECT_RESULT"))
+echo "Caro usuario," > "$SHARED_DIR/logs/$MAIL_BODY"
 echo "Foram liberados $PRINT_AUDIT_DATA poligonos para auditar" >> "$SHARED_DIR/logs/$MAIL_BODY"
 echo "" >> "$SHARED_DIR/logs/$MAIL_BODY"
 echo "Acesse: http://www.dpi.inpe.br/fipcerrado/detersar/" >> "$SHARED_DIR/logs/$MAIL_BODY"
