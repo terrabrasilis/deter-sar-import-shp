@@ -79,6 +79,9 @@ ADD env-scripts/docker-entrypoint.sh $INSTALL_PATH/bin/docker-entrypoint.sh
 RUN chmod +x $INSTALL_PATH/bin/*.sh \
     && ln -s usr/local/bin/docker-entrypoint.sh / # backwards compat
 
+# Change ssmtp config file to allow sendmail client to include "From" header
+RUN echo "FromLineOverride=YES" >> /etc/ssmtp/ssmtp.conf
+
 # expose shared dirs
 VOLUME ["${SHARED_DIR}", "${INPUT_DIR}", "/logs"]
 
