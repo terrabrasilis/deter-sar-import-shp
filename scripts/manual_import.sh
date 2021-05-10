@@ -4,4 +4,4 @@ source /etc/environment
 cd $INSTALL_PATH/scripts-shell
 
 echo "deter_r_29_04_21.json" > "$INPUT_DIR/trigger.txt"
-. ./import_shapes_to_database.sh
+. ./import_to_database.sh

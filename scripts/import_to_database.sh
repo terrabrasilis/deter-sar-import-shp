@@ -44,25 +44,52 @@ SQL_LOG_IMPORT="INSERT INTO $SCHEMA.deter_sar_import_log(imported_at, filename) 
 SQL_CHECK_FILE="SELECT 'YES' FROM $SCHEMA.deter_sar_import_log WHERE filename = '$INPUT_FILE'"
 # Options to create mode and default srid to input/output
 OGR_OPTIONS="-t_srs EPSG:4674 -lco GEOMETRY_NAME=geometries -nln $SCHEMA.$OUTPUT_SOURCE_TABLE"
+SHP2PGSQL_OPTIONS="-c -s 4326:4674 -W 'LATIN1' -g geometries"
 
-# find the shapename into log table
-SHP_MATCHED=($($PG_BIN/psql $PG_CON -t -c "$SQL_CHECK_FILE"))
+# find the input file into log table
+FILE_MATCHED=($($PG_BIN/psql $PG_CON -t -c "$SQL_CHECK_FILE"))
+IMPORT_CTRL=false
 
 if [[ "0" = "$?" ]];
 then
   echo "Conection ok..."
 
-  if [[ ! "YES" = "$SHP_MATCHED" ]];
+  if [[ ! "YES" = "$FILE_MATCHED" ]];
   then
     # copy deter-sar file to keep as backup
     cp -a $INPUT_DIR"/"$INPUT_FILE "$SHARED_DIR/"
 
-    # import input file
-    if $PG_BIN/ogr2ogr -f "PostgreSQL" PG:"$OGR_PG_CON" $SHARED_DIR"/"$INPUT_FILE $OGR_OPTIONS
-    then
+    # split file name and extension
+    EXTENSION="${INPUT_FILE##*.}"
+    FILE_NAME="${INPUT_FILE%.*}"
+    if [[ "$EXTENSION" = "zip" ]]; then
+      unzip -j $SHARED_DIR"/"$INPUT_FILE -d "$SHARED_DIR/"
+      # import shapefiles
+      if $PG_BIN/shp2pgsql $SHP2PGSQL_OPTIONS $SHARED_DIR"/"$FILE_NAME $SCHEMA"."$OUTPUT_SOURCE_TABLE | $PG_BIN/psql $PG_CON
+      then
+        IMPORT_CTRL=true
+      fi
+    else
+      # import geojson file
+      if $PG_BIN/ogr2ogr -f "PostgreSQL" PG:"$OGR_PG_CON" $SHARED_DIR"/"$INPUT_FILE $OGR_OPTIONS
+      then
+        IMPORT_CTRL=true
+      fi
+    fi
+
+    
+    
+
+    # control to check the file import
+    if [ $IMPORT_CTRL = true ]; then
         echo "$DATE_LOG - Import ($INPUT_FILE) ... OK" >> "$SHARED_DIR/logs/import-input-file.log"
         $PG_BIN/psql $PG_CON -t -c "$SQL_LOG_IMPORT"
         $PG_BIN/psql $PG_CON -t -c "$ADD_UUID"
+
+        # remove uncompressed shp files
+        if [[ "$EXTENSION" = "zip" ]]; then
+          rm ${SHARED_DIR}/${FILE_NAME}*.{shx,prj,shp,dbf,cpg,fix}
+        fi
         # remove trigger file
         rm "$INPUT_DIR/trigger.txt"
 
