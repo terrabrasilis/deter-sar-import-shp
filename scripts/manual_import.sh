@@ -77,3 +77,7 @@ export CREATED_AT="2021-05-08"
 echo "DETER_R_AMZ_CR2_2021-05-08_2021-05-08.geojson" > "$INPUT_DIR/trigger.txt"
 export CREATED_AT="2021-05-09"
 . ./import_to_database.sh
+
+echo "DETER_R_AMZ_CR2_2021-05-09_2021-05-09.geojson" > "$INPUT_DIR/trigger.txt"
+export CREATED_AT="2021-05-10"
+. ./import_to_database.sh

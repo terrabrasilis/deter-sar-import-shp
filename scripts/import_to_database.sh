@@ -105,7 +105,7 @@ then
   else
     echo "$DATE_LOG - The INPUT_FILE($INPUT_FILE) has been imported before." >> "$SHARED_DIR/logs/import-input-file.log"
   fi
-
+  echo "$DATE_LOG ---------------------- END OF THE IMPORT PROCESS --------------------- " >>"$SHARED_DIR/logs/import-input-file.log"
 else
   echo "Conection failure..."
 fi
