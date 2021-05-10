@@ -18,6 +18,13 @@ OUTPUT_INTERMEDIARY_TABLE="by_percentage_of_coverage"
 BASE_SCHEMA="deter_sar"
 OUTPUT_SOURCE_TABLE="$1"
 
+# if created_at is defined from manual import
+if [[ -v CREATED_AT ]]; then
+	REFERENCE_DATE="'${CREATED_AT}'"
+else
+	REFERENCE_DATE="now()"
+fi
+
 # new index to improve diff
 CREATE_INDEX="""
 CREATE INDEX ${OUTPUT_SOURCE_TABLE}_idx_geom
@@ -30,7 +37,7 @@ CREATE INDEX ${OUTPUT_SOURCE_TABLE}_idx_geom
 CREATE_TABLE="""
 CREATE TABLE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE AS
 SELECT ''::character varying as nome_avaliador, null::integer as auditar, null::date as date_audit, intensity,
-    n_alerts, daydetec, area_ha, label, class, now()::date as created_at, uuid,
+    n_alerts, daydetec, area_ha, label, class, $REFERENCE_DATE::date as created_at, uuid,
 	  (ST_Multi(ST_CollectionExtract(
 		COALESCE(
 		  safe_diff(a.geometries,
@@ -39,6 +46,7 @@ SELECT ''::character varying as nome_avaliador, null::integer as auditar, null::
 			  WHERE
 				b.source='D'
 				AND b.classname IN ('DESMATAMENTO_VEG','DESMATAMENTO_CR','MINERACAO')
+				AND created_at<=$REFERENCE_DATE::date
 				AND (a.geometries && b.geom)
 			)
 		  ),
@@ -62,7 +70,7 @@ WITH calculate_area AS (
 	FROM $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
 )
 UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
-SET auditar=0, date_audit=now()::date, nome_avaliador='automatico'
+SET auditar=0, date_audit=$REFERENCE_DATE::date, nome_avaliador='automatico'
 FROM calculate_area b
 WHERE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE.uuid=b.uuid AND b.area_diff < (b.area_original*$THRESHOLD)
 """
@@ -139,7 +147,7 @@ DROP_TMP_TABLE="DROP TABLE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE"
 SELECT_RESULT="""
 SELECT count(*) 
 FROM $SCHEMA.$OUTPUT_FINAL_TABLE
-WHERE created_at>=now()::date and source='S' and auditar=1
+WHERE created_at>=$REFERENCE_DATE::date and source='S' and auditar=1
 """
 
 # create index to improve diff process 

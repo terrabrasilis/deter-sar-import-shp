@@ -24,3 +24,17 @@ FROM $SCHEMA.$OUTPUT_SOURCE_TABLE;
 # copy SAR data to full AMZ output table
 $PG_BIN/psql $PG_CON -t -c "$COPY_TO_FULL_TABLE"
 echo "$DATE_LOG - Copy SAR data to $SCHEMA.$FULL_TABLE" >> "$SHARED_DIR/logs/import-input-file.log"
+
+# if created_at is defined from manual import
+if [[ -v CREATED_AT ]]; then
+
+UPDATE_CREATED_AT="""
+UPDATE $SCHEMA.$FULL_TABLE SET created_at='$CREATED_AT'::date
+WHERE created_at=now()::date
+"""
+
+# update created_at forced from environment var
+$PG_BIN/psql $PG_CON -t -c "$UPDATE_CREATED_AT"
+echo "$DATE_LOG - Force created_at update by envvar $SCHEMA.$FULL_TABLE" >> "$SHARED_DIR/logs/import-input-file.log"
+
+fi
