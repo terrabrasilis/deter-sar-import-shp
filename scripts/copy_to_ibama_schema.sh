@@ -89,6 +89,13 @@ WHERE uuid IN (
 )
 """
 
+# Set auditar=0 for anyone who is still null after applying the rules
+ANYONE_STILL_NULL="""
+UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
+SET auditar=0
+WHERE auditar IS NULL AND date_audit IS NULL
+"""
+
 # change the class column to accept updating the class name
 ALTER_CLASS_COL="""
 ALTER TABLE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
@@ -153,6 +160,10 @@ echo "$DATE_TIME_LOG - Define the first 100 candidates" >> "$SHARED_DIR/logs/$LO
 # Update audit to 1 to the random 300 candidates
 $PG_BIN/psql $PG_CON -t -c "$CANDIDATES_BY_RANDOM"
 echo "$DATE_TIME_LOG - Define the random 300 candidates" >> "$SHARED_DIR/logs/$LOGFILE"
+
+# Update the audit to 0 for the residual
+$PG_BIN/psql $PG_CON -t -c "$ANYONE_STILL_NULL"
+echo "$DATE_TIME_LOG - Update the auditar to 0 for the residual" >> "$SHARED_DIR/logs/$LOGFILE"
 
 # Change class column
 $PG_BIN/psql $PG_CON -t -c "$ALTER_CLASS_COL"
