@@ -52,6 +52,7 @@ ENV INPUT_DIR /input/files
 RUN echo "export SHARED_DIR=\"${SHARED_DIR}\"" >> /etc/environment \
     && echo "export INSTALL_PATH=\"${INSTALL_PATH}\"" >> /etc/environment \
     && echo "export INPUT_DIR=\"${INPUT_DIR}\"" >> /etc/environment \
+    && echo "export EMAIL_CTRL=true" >> /etc/environment \
     && echo "export TZ=America/Sao_Paulo" >> /etc/environment
 
 # INSTALL SCRIPTS
