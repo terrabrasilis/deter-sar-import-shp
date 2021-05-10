@@ -77,9 +77,6 @@ then
       fi
     fi
 
-    
-    
-
     # control to check the file import
     if [ $IMPORT_CTRL = true ]; then
         echo "$DATE_LOG - Import ($INPUT_FILE) ... OK" >> "$SHARED_DIR/logs/import-input-file.log"
