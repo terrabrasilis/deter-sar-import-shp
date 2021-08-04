@@ -18,19 +18,35 @@ OGR_PG_CON="dbname='$database' host='$host' port='$port' user='$user' password='
 echo
 echo "=========================== $DATE_LOG ==========================="
 
-# try read input file name from trigger file
-if [[ -f "$INPUT_DIR/trigger.txt" ]];
-then
-  # get input file name
-  INPUT_FILE=$(cat $INPUT_DIR/trigger.txt)
-else
-  # hasn't a trigger file, aborting
-  exit
-fi
+# define today format
+FILE_DATE=$(date '+%Y%m%d')
+# To check if the DETER aggregation is ready
+CONTROL_BASE_URL="http://www1.dpi.inpe.br/obt/deter/dados/areateste/controle"
+# The aggregation process is still running when the lock file exists
+LOCK_FILE="deter_block_"$FILE_DATE".txt"
 
-if [[ ! -f $INPUT_DIR"/"$INPUT_FILE ]]; then
-  echo "$DATE_LOG - Cannot find INPUT_FILE($INPUT_FILE), aborting..."
+IS_LOCKED=$CONTROL_BASE_URL"/"$LOCK_FILE
+if ( curl -o/dev/null -sfI "$IS_LOCKED" ); then
+  echo "$DATE_LOG - Lock file exists, so, the aggregation process is still running, abort"
   exit
+else
+  echo "$DATE_LOG - No lock file, proceeding"
+
+  # try read input file name from trigger file
+  if [[ -f "$INPUT_DIR/trigger.txt" ]];
+  then
+    # get input file name
+    INPUT_FILE=$(cat $INPUT_DIR/trigger.txt)
+  else
+    # hasn't a trigger file, aborting
+    exit
+  fi
+
+  if [[ ! -f $INPUT_DIR"/"$INPUT_FILE ]]; then
+    # hasn't a alerts data file, aborting
+    echo "$DATE_LOG - Cannot find INPUT_FILE($INPUT_FILE), aborting..."
+    exit
+  fi
 fi
 
 # gen_random_uuid depends on the pgcrypto extension in some versions of PostgreSQL
