@@ -143,11 +143,18 @@ WHERE auditar=0 AND date_audit IS NOT NULL;
 
 DROP_TMP_TABLE="DROP TABLE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE"
 
-# result to send inside email
-SELECT_RESULT="""
+# Number of alerts sent to audit 
+SELECT_RESULT1="""
 SELECT count(*) 
 FROM $SCHEMA.$OUTPUT_FINAL_TABLE
-WHERE created_at>=$REFERENCE_DATE::date and source='S' and auditar=1
+WHERE created_at>=$REFERENCE_DATE::date AND source='S' AND auditar=1
+"""
+
+# Number of alerts approved by automatic audit
+SELECT_RESULT2="""
+SELECT count(*) 
+FROM $SCHEMA.$AUDITED_TABLE
+WHERE created_at>=$REFERENCE_DATE::date AND nome_avaliador='automatico'
 """
 
 # create index to improve diff process 
@@ -198,9 +205,11 @@ $PG_BIN/psql $PG_CON -t -c "$DROP_TMP_TABLE"
 echo "$DATE_TIME_LOG - Drop the temporary table ($OUTPUT_INTERMEDIARY_TABLE)" >> "$SHARED_DIR/logs/$LOGFILE"
 
 # read the final data table to send over email
-PRINT_AUDIT_DATA=($($PG_BIN/psql $PG_CON -At -c "$SELECT_RESULT"))
+PRINT_AUDIT_DATA1=($($PG_BIN/psql $PG_CON -At -c "$SELECT_RESULT1"))
+PRINT_AUDIT_DATA2=($($PG_BIN/psql $PG_CON -At -c "$SELECT_RESULT2"))
 echo "Caro usuario," > "$SHARED_DIR/logs/$MAIL_BODY"
-echo "Foram liberados $PRINT_AUDIT_DATA poligonos para auditar" >> "$SHARED_DIR/logs/$MAIL_BODY"
+echo "Foram liberados $PRINT_AUDIT_DATA1 poligonos para auditar" >> "$SHARED_DIR/logs/$MAIL_BODY"
+echo "Poligonos auditado automaticamente: $PRINT_AUDIT_DATA2" >> "$SHARED_DIR/logs/$MAIL_BODY"
 echo "" >> "$SHARED_DIR/logs/$MAIL_BODY"
 echo "Acesse: http://www.dpi.inpe.br/fipcerrado/detersar/" >> "$SHARED_DIR/logs/$MAIL_BODY"
 echo "" >> "$SHARED_DIR/logs/$MAIL_BODY"
