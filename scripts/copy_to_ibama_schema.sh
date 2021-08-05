@@ -209,7 +209,7 @@ PRINT_AUDIT_DATA1=($($PG_BIN/psql $PG_CON -At -c "$SELECT_RESULT1"))
 PRINT_AUDIT_DATA2=($($PG_BIN/psql $PG_CON -At -c "$SELECT_RESULT2"))
 echo "Caro usuario," > "$SHARED_DIR/logs/$MAIL_BODY"
 echo "Foram liberados $PRINT_AUDIT_DATA1 poligonos para auditar" >> "$SHARED_DIR/logs/$MAIL_BODY"
-echo "Poligonos auditado automaticamente: $PRINT_AUDIT_DATA2" >> "$SHARED_DIR/logs/$MAIL_BODY"
+echo "Poligonos auditados automaticamente: $PRINT_AUDIT_DATA2" >> "$SHARED_DIR/logs/$MAIL_BODY"
 echo "" >> "$SHARED_DIR/logs/$MAIL_BODY"
 echo "Acesse: http://www.dpi.inpe.br/fipcerrado/detersar/" >> "$SHARED_DIR/logs/$MAIL_BODY"
 echo "" >> "$SHARED_DIR/logs/$MAIL_BODY"
