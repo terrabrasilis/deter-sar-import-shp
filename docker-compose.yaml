@@ -8,5 +8,7 @@ services:
       - /data/import_geojson:/data/files
       - /data/import_geojson/logs:/logs
       - /data/import_geojson/input:/input/files
-      - /data/import_geojson/ssmtp.conf:/etc/ssmtp/ssmtp.conf
+      - /data/import_geojson/ssmtp.conf:/etc/ssmtp/ssmtp.conf:ro
+    environment:
+      - "SUBJECT=[DETER-R-DOT4] - Log de importacao de dados para validacao"
     restart: always
