@@ -6,12 +6,10 @@ BODY="$1"
 if [ $EMAIL_CTRL = true ]; then
 
 TO=$(cat "$SHARED_DIR"/mail_to.cfg )
-(cat - $BODY)<<HEADERS_END | /usr/sbin/sendmail -F "TerraBrasilis" -i $TO
-Subject: [DETER-R] - Log de importacao de dados para validacao
-From: "terrabrasilis@inpe.br"
-To: $TO
+TMP_BODY=`echo "Subject: ${SUBJECT}"; cat ${BODY}`
+echo "${TMP_BODY}" > ${BODY}
 
-HEADERS_END
+ssmtp -F'TerraBrasilis' -vvv ${TO} < ${BODY}
 
 else
   echo "------------- email content start --------------"

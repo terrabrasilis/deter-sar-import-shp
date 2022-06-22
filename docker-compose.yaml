@@ -1,11 +1,12 @@
 version: '2'
 
 services:
-  import-amz-shp:
-    image: terrabrasilis/deter-sar-import-shp:v1.4.1
-    container_name: import-amz-shp
+  deter-sar-import-data:
+    image: terrabrasilis/deter-sar-import-data:v1.4.1
+    container_name: deter-sar-import-data
     volumes:
       - /data/import_geojson:/data/files
       - /data/import_geojson/logs:/logs
       - /data/import_geojson/input:/input/files
+      - /data/import_geojson/ssmtp.conf:/etc/ssmtp/ssmtp.conf
     restart: always
