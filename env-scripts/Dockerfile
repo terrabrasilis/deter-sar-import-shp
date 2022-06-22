@@ -8,12 +8,8 @@
 #--------- Generic stuff all our Dockerfiles should start with so we get caching ------------
 FROM ubuntu:18.04
 
-ARG VERSION=x.y
-ENV VERSION=$VERSION
-
 LABEL "br.inpe.dpi"="INPE/DPI-TerraBrasilis" \
 br.inpe.dpi.terrabrasilis="script-tasks" \
-version=${VERSION} \
 author="Andre Carvalho" \
 author.email="andre.carvalho@inpe.br" \
 description="Scripts for importing geographic data files from disk to the database table in PostGIS."

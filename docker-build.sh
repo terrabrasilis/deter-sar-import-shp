@@ -15,11 +15,11 @@ VERSION=$(git describe --tags --abbrev=0)
 
 echo 
 echo "/######################################################################/"
-echo " Build new image terrabrasilis/deter-sar-import-shp:$VERSION "
+echo " Build new image terrabrasilis/deter-sar-import-data:$VERSION "
 echo "/######################################################################/"
 echo
 
-docker build $NO_CACHE -t "terrabrasilis/deter-sar-import-shp:$VERSION" --build-arg VERSION="$VERSION" -f env-scripts/Dockerfile .
+docker build $NO_CACHE -t "terrabrasilis/deter-sar-import-data:$VERSION" -f env-scripts/Dockerfile .
 
 # send to dockerhub
 echo 
@@ -28,5 +28,5 @@ if [[ ! "$SEND_TO_HUB" = "yes" ]]; then
     echo "Ok, not send the images."
 else
     echo "Nice, sending the image!"
-    docker push "terrabrasilis/deter-sar-import-shp:$VERSION"
+    docker push "terrabrasilis/deter-sar-import-data:$VERSION"
 fi
