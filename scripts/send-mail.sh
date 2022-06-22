@@ -3,7 +3,7 @@
 BODY="$1"
 
 # if email control is enable
-if [ $EMAIL_CTRL = true ]; then
+if [[ $EMAIL_CTRL = true ]]; then
 
 TO=$(cat "$SHARED_DIR"/mail_to.cfg )
 TMP_BODY=`echo "Subject: ${SUBJECT}"; cat ${BODY}`
