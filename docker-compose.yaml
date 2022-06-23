@@ -1,14 +1,26 @@
 version: '2'
 
 services:
-  deter-sar-import-data:
-    image: terrabrasilis/deter-sar-import-data:v1.4.1
-    container_name: deter-sar-import-data
+  import-collection1:
+    image: terrabrasilis/deter-sar-import-data:v1.6.6
+    container_name: import-collection1
     volumes:
-      - /data/import_geojson:/data/files
-      - /data/import_geojson/logs:/logs
-      - /data/import_geojson/input:/input/files
-      - /data/import_geojson/ssmtp.conf:/etc/ssmtp/ssmtp.conf:ro
+      - /data/import-amz-shp-script:/data/files
+      - /data/import-amz-shp-script/logs:/logs
+      - /data/deteramz-sar/DETER_R_AMZ/output:/input/files
+      - /data/ssmtp.conf:/etc/ssmtp/ssmtp.conf:ro
+    environment:
+      - "SUBJECT=[DETER-R] - Log de importacao de dados para validacao"
+    restart: always
+
+  import-collection2:
+    image: terrabrasilis/deter-sar-import-data:v1.6.6
+    container_name: import-collection2
+    volumes:
+      - /data/import-amz-dot4-script:/data/files
+      - /data/import-amz-dot4-script/logs:/logs
+      - /data/deteramz-sar-dot4/DETER_R_AMZ/output:/input/files
+      - /data/ssmtp.conf:/etc/ssmtp/ssmtp.conf:ro
     environment:
       - "SUBJECT=[DETER-R-DOT4] - Log de importacao de dados para validacao"
     restart: always
