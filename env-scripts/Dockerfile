@@ -24,6 +24,7 @@ RUN apt-get -o Acquire::ForceIPv4=true update \
     gnupg \
     unzip \
     ssmtp \
+    curl \
     gdal-bin
 
 RUN wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
