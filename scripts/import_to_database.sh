@@ -21,7 +21,7 @@ echo "=========================== $DATE_LOG ==========================="
 # define today format
 FILE_DATE=$(date '+%Y%m%d')
 # To check if the DETER aggregation is ready
-CONTROL_BASE_URL="http://www1.dpi.inpe.br/obt/deter/dados/areateste/controle"
+CONTROL_BASE_URL="http://www.dpi.inpe.br/prodesdigital/dados/areateste/controle"
 # The aggregation process is still running when the lock file exists
 LOCK_FILE="deter_block_"$FILE_DATE".txt"
 
