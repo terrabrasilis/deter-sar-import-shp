@@ -2,7 +2,7 @@ version: '2'
 
 services:
   import-collection1:
-    image: terrabrasilis/deter-sar-import-data:v1.6.6
+    image: terrabrasilis/deter-sar-import-data:v1.6.7
     container_name: import-collection1
     volumes:
       - /data/import-amz-shp-script:/data/files
@@ -13,14 +13,14 @@ services:
       - "SUBJECT=[DETER-R] - Log de importacao de dados para validacao"
     restart: always
 
-  import-collection2:
-    image: terrabrasilis/deter-sar-import-data:v1.6.6
-    container_name: import-collection2
-    volumes:
-      - /data/import-amz-dot4-script:/data/files
-      - /data/import-amz-dot4-script/logs:/logs
-      - /data/deteramz-sar-dot4/DETER_R_AMZ/output:/input/files
-      - /data/ssmtp.conf:/etc/ssmtp/ssmtp.conf:ro
-    environment:
-      - "SUBJECT=[DETER-R-DOT4] - Log de importacao de dados para validacao"
-    restart: always
+  # import-collection2:
+  #   image: terrabrasilis/deter-sar-import-data:v1.6.6
+  #   container_name: import-collection2
+  #   volumes:
+  #     - /data/import-amz-dot4-script:/data/files
+  #     - /data/import-amz-dot4-script/logs:/logs
+  #     - /data/deteramz-sar-dot4/DETER_R_AMZ/output:/input/files
+  #     - /data/ssmtp.conf:/etc/ssmtp/ssmtp.conf:ro
+  #   environment:
+  #     - "SUBJECT=[DETER-R-DOT4] - Log de importacao de dados para validacao"
+  #   restart: always
