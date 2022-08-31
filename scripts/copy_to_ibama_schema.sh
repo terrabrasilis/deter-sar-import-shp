@@ -86,8 +86,8 @@ WHERE uuid IN (
 )
 """
 
-# the 300 candidates by random
-LIMIT="300"
+# the 100 candidates by random
+LIMIT="100"
 CANDIDATES_BY_RANDOM="""
 UPDATE $SCHEMA.$OUTPUT_INTERMEDIARY_TABLE
 SET auditar=1
