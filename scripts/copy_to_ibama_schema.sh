@@ -54,7 +54,7 @@ SELECT ''::character varying as nome_avaliador, null::integer as auditar, null::
 		)
 	  ,3))
 	  ) AS geom_diff,
-	  a.geometries as geom_original
+	  ST_Multi(a.geometries) as geom_original
 FROM $BASE_SCHEMA.$OUTPUT_SOURCE_TABLE a;
 """
 
