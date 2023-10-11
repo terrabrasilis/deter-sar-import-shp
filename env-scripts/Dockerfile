@@ -6,7 +6,7 @@
 #   docker run -d --rm --name terrabrasilis_deter_scripts -v $PWD:/data/files terrabrasilis/daily-deter-for-ibama:vx.y
 #
 #--------- Generic stuff all our Dockerfiles should start with so we get caching ------------
-FROM ubuntu:18.04
+FROM ubuntu:22.04
 
 LABEL "br.inpe.dpi"="INPE/DPI-TerraBrasilis" \
 br.inpe.dpi.terrabrasilis="script-tasks" \
@@ -25,16 +25,8 @@ RUN apt-get -o Acquire::ForceIPv4=true update \
     unzip \
     ssmtp \
     curl \
-    gdal-bin
-
-RUN wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
-    && echo "deb http://apt.postgresql.org/pub/repos/apt/ bionic-pgdg main" > /etc/apt/sources.list.d/pgdg.list
-
-RUN apt-get -o Acquire::ForceIPv4=true update \
-      && apt-get install -y --no-install-recommends \
-           postgresql-10-postgis-2.5 \
-           postgis \
-      && rm -rf /var/lib/apt/lists/*
+    gdal-bin \
+    postgresql-14-postgis-3
 
 # define the timezone to run cron
 ENV TZ=America/Sao_Paulo
