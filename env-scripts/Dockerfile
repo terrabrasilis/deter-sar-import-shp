@@ -16,17 +16,18 @@ description="Scripts for importing geographic data files from disk to the databa
 #-------------Application Specific Stuff ----------------------------------------------------
 
 RUN apt-get -o Acquire::ForceIPv4=true update \
-    && apt-get install -y \
+    && DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y --no-install-recommends \
     cron \
     tzdata \
     bash \
-    wget \
     gnupg \
     unzip \
     ssmtp \
     curl \
     gdal-bin \
-    postgresql-14-postgis-3
+    postgresql-14-postgis-3 \
+    && apt-get clean
 
 # define the timezone to run cron
 ENV TZ=America/Sao_Paulo
