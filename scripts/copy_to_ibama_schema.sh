@@ -11,7 +11,7 @@ MAIL_BODY="mail_body_$DATE_LOG"
 PG_BIN="/usr/bin"
 PG_CON="-d $database -p $port -h $host"
 
-SCHEMA="deter_agregate"
+SCHEMA="public"
 OUTPUT_FINAL_TABLE="deter" # final data table used to send shapefile to the IBAMA
 AUDITED_TABLE="deter_sar_1ha_validados"
 OUTPUT_INTERMEDIARY_TABLE="by_percentage_of_coverage"
